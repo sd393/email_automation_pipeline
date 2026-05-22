@@ -177,9 +177,93 @@ def fake_dns_answer():
 
 @pytest.fixture
 def fake_llm_client():
-    pytest.skip("fake_llm_client is filled in by section 04")
+    """A minimal stand-in for scripts.lib.llm.LLMClient.
+
+    Use ``client.queue(parsed_or_exception)`` to enqueue behaviors for upcoming
+    ``parse()`` calls. Refusals, low-confidence, and exceptions are all expressed
+    by what you queue (see tests/lib/test_llm.py for the canonical fakes).
+    """
+    from dataclasses import dataclass
+
+    @dataclass
+    class _Cost:
+        usd: float = 0.0
+        input_tokens: int = 0
+        output_tokens: int = 0
+        web_search_calls: int = 0
+        model: str = "fake"
+
+        def __add__(self, other):
+            return _Cost(
+                usd=self.usd + other.usd,
+                input_tokens=self.input_tokens + other.input_tokens,
+                output_tokens=self.output_tokens + other.output_tokens,
+                web_search_calls=self.web_search_calls + other.web_search_calls,
+                model=self.model,
+            )
+
+    @dataclass
+    class _Result:
+        parsed: object = None
+        refused: bool = False
+        refusal_text: str = ""
+        low_confidence: bool = False
+        cost: _Cost = field(default_factory=_Cost)
+
+    class _Fake:
+        def __init__(self):
+            self._behaviors = []
+            self.parse_calls = []
+            self.cascade_calls = []
+
+        def queue(self, behavior):
+            self._behaviors.append(behavior)
+
+        def parse(self, messages, text_format, **kwargs):
+            self.parse_calls.append((messages, text_format, kwargs))
+            if not self._behaviors:
+                raise AssertionError("fake_llm_client: no queued behavior")
+            b = self._behaviors.pop(0)
+            if isinstance(b, Exception):
+                raise b
+            return b
+
+        def cascade(self, messages, text_format, **kwargs):
+            self.cascade_calls.append((messages, text_format, kwargs))
+            return self.parse(messages, text_format, **kwargs)
+
+    return _Fake()
 
 
 @pytest.fixture
 def fake_gmail_client():
-    pytest.skip("fake_gmail_client is filled in by section 04")
+    """Minimal stand-in for scripts.lib.gmail.GmailClient.
+
+    ``client.queue_send_response(response_dict_or_exception)`` controls what the
+    next ``send()`` returns. Sent payloads are captured on ``client.sent``.
+    """
+
+    class _Fake:
+        def __init__(self):
+            self._responses = []
+            self.sent: list[dict] = []
+            self.bounces: list = []
+
+        def queue_send_response(self, behavior):
+            self._responses.append(behavior)
+
+        def send(self, to, **kwargs):
+            payload = {"to": to, **kwargs}
+            self.sent.append(payload)
+            if not self._responses:
+                from scripts.lib.gmail import SendResult
+                return SendResult(gmail_message_id=f"mid-{len(self.sent)}", thread_id=f"tid-{len(self.sent)}")
+            b = self._responses.pop(0)
+            if isinstance(b, Exception):
+                raise b
+            return b
+
+        def list_bounces(self, since_message_id=None):
+            return list(self.bounces)
+
+    return _Fake()
