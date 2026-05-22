@@ -1,0 +1,48 @@
+[project]
+name = "outreach-bot"
+version = "0.1.0"
+description = "Claude Code-driven cold-outreach automation: source → discover → verify → compose → send → track bounces."
+requires-python = ">=3.12"
+readme = "README.md"
+
+dependencies = [
+    "openai>=1.50",
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+    "dnspython>=2.6",
+    "google-api-python-client>=2.130",
+    "google-auth-oauthlib>=1.2",
+    "google-auth>=2.29",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+# Dev / test deps. We use `respx` for HTTPX mocking (preferred over httpx-mock for its
+# pytest fixture ergonomics; either would work here).
+dev = [
+    "pytest>=8",
+    "pytest-mock>=3.12",
+    "aiosmtpd>=1.4",
+    "respx>=0.21",
+]
+
+[project.scripts]
+outreach-source-domains = "scripts.source_domains:main"
+outreach-discover-contacts = "scripts.discover_contacts:main"
+outreach-verify-emails = "scripts.verify_emails:main"
+outreach-compose-emails = "scripts.compose_emails:main"
+outreach-send-emails = "scripts.send_emails:main"
+outreach-poll-bounces = "scripts.poll_bounces:main"
+outreach-status = "scripts.status:main"
+outreach-run-pipeline = "scripts.run_pipeline:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["scripts"]

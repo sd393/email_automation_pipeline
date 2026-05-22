@@ -1,0 +1,16 @@
+# Per-verifier configuration. lib/verifiers/*.py reads this file.
+# brief.verifier.chain references verifier names that must appear here with enabled: true.
+
+smtp_probe:
+  enabled: true
+  rate_per_sec: 0.5
+  per_hour_cap: 50
+
+web_citation:
+  enabled: true
+  fetch_timeout: 8.0
+
+api_provider:
+  enabled: false              # off by default; flip to true to use ZeroBounce/NeverBounce
+  provider: zerobounce        # zerobounce | neverbounce
+  # The api_key is read from secrets.env as ZEROBOUNCE_API_KEY or NEVERBOUNCE_API_KEY

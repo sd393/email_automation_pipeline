@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# Secrets and tokens — never commit
+config/secrets.env
+config/token.json
+config/client_secret.json
+
+# Runtime data — never commit
+data/
+campaigns/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/

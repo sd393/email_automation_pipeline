@@ -1,0 +1,29 @@
+# Engine-wide defaults. Loaded by lib/brief.py and stage scripts.
+# Values here are sane defaults; brief.yaml fields override where applicable.
+
+# LLM tier cascade (lib/llm.py reads these).
+# Tier 1 handles the bulk of calls; escalate to tier 2 only on empty/low-confidence/refusal.
+llm:
+  tier1: gpt-4.1-mini
+  tier2: gpt-5
+  fallbacks: [gpt-5.2, gpt-5, gpt-4.1]
+  low_confidence_threshold: 0.4
+
+# Verifier defaults (lib/verifiers/*.py read these; brief.verifier can override per-run).
+verifier_defaults:
+  rate_per_sec: 0.5
+  per_hour_cap: 50
+  burst: 10
+  greylist_retry: true
+  timeout_seconds: 10.0
+
+# Observability cadence (lib/observability.py reads these).
+# StageObserver emits progress every N items OR every M seconds, whichever comes first.
+observability:
+  cadence_items: 50
+  cadence_seconds: 120
+
+# Send-side defaults (brief.sending can override).
+sending_defaults:
+  throttle_seconds: 45
+  send_test_count: 10

@@ -1,0 +1,60 @@
+# Canonical brief template. Copy to campaigns/<YYYY-MM>_<slug>/brief.yaml and fill in.
+# lib/brief.py (section 02) is the Pydantic schema that validates this file.
+
+# Identity
+slug: medium-retailers           # required, kebab-case (lowercase letters, digits, hyphens)
+created_at: 2026-05-21           # ISO date, auto-filled by Claude Code at brief-creation time
+
+# Target — what's being targeted
+target:
+  segment: "Medium-sized multi-brand retailers"   # required, one-line description
+  include: ["curated marketplaces", "hybrid retailer-brands"]
+  exclude: ["pure single-brand DTC", "enterprise (>$500M rev)"]
+  geography: "US + Canada"
+  target_domain_count: 1500       # required, int > 0
+
+# Who to contact (leverage)
+who_to_contact:
+  priority_roles:                 # required, at least 1
+    - Founder
+    - CEO
+    - VP E-commerce
+    - Head of Digital
+    - CTO
+  deprioritize:
+    - Marketing
+    - PR
+    - HR
+    - "generic info@"
+  contacts_per_company: 3         # default 3, max 12
+
+# Message
+message:
+  template: templates/ai-agent-integration.md     # required, path relative to repo root; file must exist
+  value_prop: "Integrate AI shopping agents on your storefront"
+  personalize_first_name: true    # whether to LLM-canonicalize first names; default true
+  from_name: "Smrjit"
+  from_gmail: "smrjit@example.com"
+  reply_to: "smrjit@example.com"
+
+# Verification
+verifier:
+  chain: [smtp_probe, web_citation]    # ordered cascade; verifier names must exist in config/verifiers.yaml
+  greylist_retry: true            # if true, 4xx → wait 90s → 1 retry → mark "unknown"
+  rate_per_sec: 0.5               # SMTP probes/sec
+  per_hour_cap: 50                # Spamhaus-safe hourly probe cap
+  burst: 10                       # token-bucket burst size
+
+# Sending
+sending:
+  send_test_count: 10             # send this many first, then PAUSE for approval
+  send_rate_per_day: 1500         # Workspace default; safety cap is 2000
+  throttle_seconds: 45            # base gap; actual delay = base * uniform(0.5, 1.5)
+
+# Safety
+safety:
+  scope: all_campaigns            # all_campaigns | this_campaign
+
+# Notes (free text, optional)
+notes: |
+  Anything Claude Code should know about this segment.
