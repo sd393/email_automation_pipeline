@@ -7,7 +7,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from scripts.lib.progress import ProgressStore
+from scripts.lib.progress import ProgressStore, check_brief_hash, write_brief_hash
 
 
 def test_empty_then_first_mark(tmp_path: Path):
@@ -112,6 +112,32 @@ def test_keys_insertion_order(tmp_path: Path):
     for k in ["c", "a", "b"]:
         store.mark(k, "ok")
     assert list(store.keys()) == ["c", "a", "b"]
+
+
+def test_brief_hash_round_trip(tmp_path: Path):
+    progress_dir = tmp_path / "progress"
+    write_brief_hash(progress_dir, b"hello")
+    assert check_brief_hash(progress_dir, b"hello") is True
+    assert check_brief_hash(progress_dir, b"different") is False
+
+
+def test_brief_hash_absent_is_true(tmp_path: Path):
+    assert check_brief_hash(tmp_path / "progress", b"anything") is True
+
+
+def test_brief_hash_overwrites_silently(tmp_path: Path):
+    progress_dir = tmp_path / "progress"
+    write_brief_hash(progress_dir, b"first")
+    write_brief_hash(progress_dir, b"second")  # silently overwrites
+    assert check_brief_hash(progress_dir, b"second") is True
+
+
+def test_brief_hash_ignores_stray_tmp(tmp_path: Path):
+    progress_dir = tmp_path / "progress"
+    write_brief_hash(progress_dir, b"hello")
+    # Stray .tmp file (crash mid-write) should NOT confuse next read.
+    (progress_dir / "brief_hash.txt.tmp").write_text("garbage", encoding="utf-8")
+    assert check_brief_hash(progress_dir, b"hello") is True
 
 
 def test_extras_round_trip(tmp_path: Path):

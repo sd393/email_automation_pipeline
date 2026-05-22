@@ -8,10 +8,12 @@ at brief-load time, not three stages later.
 
 from __future__ import annotations
 
+import json
 import re
+import sys
 from datetime import date
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal, NoReturn, Optional
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -216,3 +218,15 @@ def load(path: Path) -> Brief:
         first = exc.errors()[0]
         loc = ".".join(str(part) for part in first["loc"])
         raise BriefValidationError(field=loc, message=first["msg"], brief_path=p) from exc
+
+
+def emit_brief_error_and_exit(e: BriefValidationError) -> NoReturn:
+    """Print the exit-3 JSON contract to stderr and exit 3."""
+    payload = {
+        "error": "BriefValidationError",
+        "field": e.field,
+        "message": e.message,
+        "brief_path": str(e.brief_path),
+    }
+    print(json.dumps(payload), file=sys.stderr)
+    sys.exit(3)

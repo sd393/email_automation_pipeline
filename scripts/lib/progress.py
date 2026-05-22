@@ -11,6 +11,7 @@ no-op stage that first exercises them.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import threading
@@ -107,6 +108,37 @@ class ProgressStore:
             return len(self._state)
 
 
-# Placeholder for brief-hash helpers — implemented in section 05 (noop + orchestration).
-# def write_brief_hash(path: Path, brief_bytes: bytes) -> None: ...
-# def check_brief_hash(path: Path, brief_bytes: bytes) -> bool: ...
+# ---------------------------------------------------------------------------
+# Brief-hash invariant
+# ---------------------------------------------------------------------------
+
+def _brief_hash_path(progress_dir: Path) -> Path:
+    return Path(progress_dir) / "brief_hash.txt"
+
+
+def _digest(brief_bytes: bytes) -> str:
+    return hashlib.sha256(brief_bytes).hexdigest()
+
+
+def write_brief_hash(progress_dir: Path, brief_bytes: bytes) -> None:
+    """Write sha256(brief_bytes) hex digest to ``<progress_dir>/brief_hash.txt``.
+
+    Atomic via ``.tmp`` + ``os.replace``. Silently overwrites if the existing
+    digest differs — callers must call :func:`check_brief_hash` first if they
+    need mismatch detection.
+    """
+    progress_dir = Path(progress_dir)
+    progress_dir.mkdir(parents=True, exist_ok=True)
+    path = _brief_hash_path(progress_dir)
+    digest = _digest(brief_bytes)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(digest, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def check_brief_hash(progress_dir: Path, brief_bytes: bytes) -> bool:
+    """Return ``False`` only when the hash file exists and disagrees."""
+    path = _brief_hash_path(progress_dir)
+    if not path.exists():
+        return True
+    return path.read_text(encoding="utf-8").strip() == _digest(brief_bytes)
