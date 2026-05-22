@@ -7,8 +7,19 @@ from pathlib import Path
 
 import pytest
 
-from scripts.noop_stage import main as noop_main
+from scripts.source_domains import _run as source_run
 from scripts.status import collect, main as status_main
+
+
+def _stamp_brief_hash(campaign_dir):
+    """Write progress/brief_hash.txt for the current brief.yaml.
+
+    Stand-in for "a stage has run". Used to put the campaign in a state where
+    status.py can detect drift.
+    """
+    from scripts.lib.progress import write_brief_hash
+    brief_bytes = (campaign_dir / "brief.yaml").read_bytes()
+    write_brief_hash(campaign_dir / "progress", brief_bytes)
 
 
 def test_empty_campaign_reports_not_started(tmp_campaign_dir, sample_brief_yaml, capsys):
@@ -24,9 +35,8 @@ def test_empty_campaign_reports_not_started(tmp_campaign_dir, sample_brief_yaml,
 
 def test_brief_hash_mismatch_reports_inconsistent(tmp_campaign_dir, sample_brief_yaml):
     (tmp_campaign_dir / "brief.yaml").write_text(sample_brief_yaml, encoding="utf-8")
-    rc = noop_main(["--campaign-dir", str(tmp_campaign_dir), "--target-count", "3"])
-    assert rc == 0
-    # Mutate brief on disk after the noop locked in a hash.
+    _stamp_brief_hash(tmp_campaign_dir)
+    # Mutate brief on disk after the hash is locked in.
     import yaml
     data = yaml.safe_load((tmp_campaign_dir / "brief.yaml").read_text())
     data["target"]["segment"] = "Mutated"

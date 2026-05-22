@@ -12,8 +12,10 @@ import yaml
 
 
 def _run_noop(campaign_dir: Path) -> subprocess.CompletedProcess:
+    """Drive the exit-3 contract via source_domains.py (the noop stage was
+    deleted in section 06 — its plumbing role transferred to a real stage)."""
     return subprocess.run(
-        [sys.executable, "scripts/noop_stage.py", "--campaign-dir", str(campaign_dir), "--target-count", "5"],
+        [sys.executable, "scripts/source_domains.py", "--campaign-dir", str(campaign_dir)],
         capture_output=True,
         text=True,
         check=False,
@@ -43,14 +45,20 @@ def test_noop_invalid_brief_emits_exit3_json(tmp_campaign_dir, sample_brief_yaml
 
 
 def test_hash_mismatch_exits_2_not_3(tmp_campaign_dir, sample_brief_yaml):
+    """Stamp a hash without running the real stage, then mutate the brief and
+    verify the next invocation exits 2 (the real stage would also exit 2 even
+    before reaching the LLM call, since the hash check is pre-LLM)."""
     (tmp_campaign_dir / "brief.yaml").write_text(sample_brief_yaml, encoding="utf-8")
-    first = _run_noop(tmp_campaign_dir)
-    assert first.returncode == 0
+    from scripts.lib.progress import write_brief_hash
+    (tmp_campaign_dir / "progress").mkdir(parents=True, exist_ok=True)
+    write_brief_hash(
+        tmp_campaign_dir / "progress",
+        (tmp_campaign_dir / "brief.yaml").read_bytes(),
+    )
     data = yaml.safe_load(sample_brief_yaml)
     data["target"]["segment"] = "Different"
     (tmp_campaign_dir / "brief.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
     second = _run_noop(tmp_campaign_dir)
     assert second.returncode == 2
-    # exit-2 error is NOT structured JSON
     assert "BriefValidationError" not in second.stderr
     assert "Brief changed since previous stage" in second.stderr
