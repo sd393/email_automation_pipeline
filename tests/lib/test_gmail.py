@@ -211,11 +211,71 @@ def test_from_with_comma_is_rfc2822_escaped(mocker):
     assert "\"Smith, John\"" in from_hdr
 
 
-def test_list_bounces_stub(mocker):
-    service = _make_service()
+def _bounce_listing(message_ids):
+    service = MagicMock()
+    chain = service.users.return_value.messages.return_value
+    chain.list.return_value.execute.return_value = {
+        "messages": [{"id": i} for i in message_ids],
+    }
+    return service, chain
+
+
+def _bounce_full_message(message_id, recipient, internal_ms=1716000000000):
+    import base64
+    body_text = f"This is an automatically generated Delivery Status Notification.\n\nFinal-Recipient: rfc822;{recipient}\nAction: failed\nStatus: 5.1.1\n"
+    encoded = base64.urlsafe_b64encode(body_text.encode("utf-8")).decode("ascii").rstrip("=")
+    return {
+        "id": message_id,
+        "internalDate": str(internal_ms),
+        "payload": {
+            "mimeType": "multipart/report",
+            "parts": [
+                {"mimeType": "text/plain", "body": {"data": encoded}},
+            ],
+        },
+    }
+
+
+def test_list_bounces_parses_final_recipient(mocker):
+    service, chain = _bounce_listing(["m1", "m2"])
+    msgs = {
+        "m1": _bounce_full_message("m1", "bad1@x.com"),
+        "m2": _bounce_full_message("m2", "bad2@y.com"),
+    }
+    chain.get.return_value.execute.side_effect = lambda: msgs[chain.get.call_args.kwargs["id"]]
     client = _make_client(mocker, service)
-    with pytest.raises(NotImplementedError):
-        client.list_bounces()
+    bounces = client.list_bounces()
+    assert len(bounces) == 2
+    emails = {b.original_recipient for b in bounces}
+    assert emails == {"bad1@x.com", "bad2@y.com"}
+    for b in bounces:
+        assert b.gmail_message_id in ("m1", "m2")
+        assert b.bounce_date is not None
+
+
+def test_list_bounces_empty(mocker):
+    service, chain = _bounce_listing([])
+    client = _make_client(mocker, service)
+    assert client.list_bounces() == []
+
+
+def test_list_bounces_missing_final_recipient_skipped(mocker):
+    import base64
+    service, chain = _bounce_listing(["m1", "m2"])
+    no_final = {
+        "id": "m1",
+        "internalDate": "1716000000000",
+        "payload": {
+            "mimeType": "text/plain",
+            "body": {"data": base64.urlsafe_b64encode(b"random body no recipient").decode().rstrip("=")},
+        },
+    }
+    msgs = {"m1": no_final, "m2": _bounce_full_message("m2", "ok@x.com")}
+    chain.get.return_value.execute.side_effect = lambda: msgs[chain.get.call_args.kwargs["id"]]
+    client = _make_client(mocker, service)
+    bounces = client.list_bounces()
+    assert len(bounces) == 1
+    assert bounces[0].original_recipient == "ok@x.com"
 
 
 # ---------------------------------------------------------------------------

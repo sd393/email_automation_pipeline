@@ -33,6 +33,55 @@ Claude will:
 3. Drive the pipeline: source domains → discover contacts → verify → compose → send Phase A (test batch).
 4. **Pause after the test batch** so you can read the first 10 emails before Phase B continues to the full list.
 
+## Manual 5-minute walkthrough
+
+If you want to drive the pipeline yourself instead of through Claude Code:
+
+```sh
+# 0. Create the campaign folder.
+python scripts/setup_campaign.py --slug 2026-05_demo
+vim campaigns/2026-05_demo/brief.yaml   # fill out target, who_to_contact, message, etc.
+
+# 1-4. Run pre-send stages.
+python scripts/source_domains.py    --campaign-dir campaigns/2026-05_demo
+python scripts/discover_contacts.py --campaign-dir campaigns/2026-05_demo
+python scripts/verify_emails.py     --campaign-dir campaigns/2026-05_demo
+python scripts/compose_emails.py    --campaign-dir campaigns/2026-05_demo
+
+# 5. Phase A test batch. Script PAUSES after `send_test_count` real sends
+# and prints a banner asking you to verify Gmail Sent + inbox placement.
+python scripts/send_emails.py --campaign-dir campaigns/2026-05_demo
+
+# After verifying:
+python scripts/send_emails.py --campaign-dir campaigns/2026-05_demo --confirm-test
+
+# 6. After a few hours, poll for bounces:
+python scripts/poll_bounces.py
+```
+
+At any point, see live state via:
+```sh
+python scripts/status.py --campaign-dir campaigns/2026-05_demo
+```
+Pass `--json` for machine-consumable output.
+
+## Troubleshooting
+
+- **Port 25 blocked** during Stage 3 → `smtp_probe.assert_available()`
+  fails with a remediation pointing at three escape hatches: connect to
+  the VPN, drop SMTP from the brief's verifier chain, or enable the
+  `api_provider` verifier.
+- **OAuth re-auth pop-up on first `poll_bounces.py`** → expected. The
+  send-scope token from Stage 5 doesn't include `gmail.readonly`. Grant
+  consent once; subsequent polls don't re-prompt.
+- **`Brief changed since previous stage`** → revert `brief.yaml` to the
+  hash recorded in `progress/brief_hash.txt`, or start a fresh campaign
+  in a new folder.
+- **Brief validation error (exit 3)** → parse the JSON line on stderr to
+  see the offending field. Fix it in `brief.yaml`, re-run.
+- **Gmail daily-cap rollover** → clean exit 0 with "Daily cap reached".
+  Re-invoke with `--resume --confirm-test` the next day.
+
 ## Layout
 
 This repo has two layers:

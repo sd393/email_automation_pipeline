@@ -197,7 +197,90 @@ class GmailClient:
         return None
 
     def list_bounces(self, since_message_id: str | None = None) -> list[BounceRecord]:
-        raise NotImplementedError("list_bounces is implemented in section 12 (M4)")
+        """Find bounce notifications in the authorized mailbox.
+
+        Returns ``BounceRecord``s newest-first. Messages without a
+        ``Final-Recipient:`` header in the body are logged at warning level
+        and skipped — they do not raise.
+        """
+        import base64
+        import logging
+        import re
+
+        logger = logging.getLogger(__name__)
+        q = 'from:mailer-daemon subject:"Delivery Status Notification (Failure)"'
+        if since_message_id:
+            try:
+                head = (
+                    self._service.users().messages()
+                    .get(userId="me", id=since_message_id, format="metadata").execute()
+                )
+                internal_date = head.get("internalDate")
+                if internal_date:
+                    q += f" after:{int(int(internal_date) / 1000)}"
+            except Exception:
+                pass  # If we can't anchor, fall back to no filter.
+
+        try:
+            listing = (
+                self._service.users().messages()
+                .list(userId="me", q=q).execute()
+            )
+        except Exception:
+            return []
+        ids = [m.get("id") for m in (listing.get("messages") or [])]
+
+        out: list[BounceRecord] = []
+        final_re = re.compile(r"^Final-Recipient:\s*[^;]*;\s*(\S+)\s*$", re.IGNORECASE | re.MULTILINE)
+
+        for mid in ids:
+            if mid == since_message_id:
+                continue
+            try:
+                full = (
+                    self._service.users().messages()
+                    .get(userId="me", id=mid, format="full").execute()
+                )
+            except Exception:
+                continue
+            internal_ms = int(full.get("internalDate", 0))
+            bounce_date = datetime.fromtimestamp(internal_ms / 1000) if internal_ms else datetime.now()
+
+            body_text = _extract_text_parts(full.get("payload") or {})
+            m = final_re.search(body_text)
+            if not m:
+                logger.warning("bounce message %s has no Final-Recipient; skipping", mid)
+                continue
+            recipient = m.group(1).strip().rstrip(">").lstrip("<")
+            out.append(BounceRecord(
+                original_recipient=recipient,
+                gmail_message_id=mid,
+                bounce_date=bounce_date,
+            ))
+        return out
+
+
+def _extract_text_parts(payload: dict) -> str:
+    """Recursively collect base64-url-decoded text/plain bodies into a single string."""
+    import base64
+
+    out = []
+
+    def _walk(part: dict) -> None:
+        mime = part.get("mimeType", "")
+        body = part.get("body") or {}
+        data = body.get("data")
+        if data and (mime.startswith("text/") or mime in ("message/delivery-status",)):
+            try:
+                padded = data + "=" * (-len(data) % 4)
+                out.append(base64.urlsafe_b64decode(padded).decode("utf-8", "replace"))
+            except Exception:
+                pass
+        for child in (part.get("parts") or []):
+            _walk(child)
+
+    _walk(payload)
+    return "\n".join(out)
 
 
 # ---------------------------------------------------------------------------

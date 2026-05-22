@@ -46,14 +46,31 @@ After filling, **read the brief back to the user one section at a time and confi
 
 ---
 
-## Stages 1–5 — pipeline (stubs; filled in by later sections)
+## Stages 1–5 — pipeline
 
-- **Stage 1 — Source domains**: see `playbooks/02-domain-sourcing.md`; invoke `scripts/source_domains.py --campaign <path>`.
-- **Stage 2 — Discover contacts**: see `playbooks/03-contact-discovery.md`; invoke `scripts/discover_contacts.py --campaign <path>`.
-- **Stage 3 — Verify emails**: see `playbooks/04-email-verification.md`; invoke `scripts/verify_emails.py --campaign <path>`.
-- **Stage 4 — Compose emails**: see `playbooks/05-email-composition.md`; invoke `scripts/compose_emails.py --campaign <path>`.
-- **Stage 5 — Send (Phase A then Phase B)**: see `playbooks/06-sending.md`. Phase A is automatic; Phase B requires `--confirm-test` AND user approval in chat. Invoke `scripts/send_emails.py --campaign <path>` for Phase A, then re-invoke with `--confirm-test` for Phase B.
-- **Stage 6 — Poll bounces**: see `playbooks/07-tracking-followup.md`; invoke `scripts/poll_bounces.py --campaign <path>` (runs on demand; bounces tagged in suppression list).
+Before invoking each stage, READ the matching playbook. The script's CLI flag is `--campaign-dir`, not `--campaign`.
+
+- **Stage 1 — Source domains**: read `playbooks/02-domain-sourcing.md`. Invoke `scripts/source_domains.py --campaign-dir <path>`. Output: `domains.csv`.
+- **Stage 2 — Discover contacts**: read `playbooks/03-contact-discovery.md`. Invoke `scripts/discover_contacts.py --campaign-dir <path>`. Output: `contacts.csv`.
+- **Stage 3 — Verify emails**: read `playbooks/04-email-verification.md`. Invoke `scripts/verify_emails.py --campaign-dir <path>`. Output: `emails.csv` (verified only).
+- **Stage 4 — Compose emails**: read `playbooks/05-email-composition.md`. Invoke `scripts/compose_emails.py --campaign-dir <path>`. Output: `outbox.csv`.
+- **Stage 5 — Send (Phase A then Phase B)**: read `playbooks/06-sending.md`. Phase A is automatic; Phase B requires `--confirm-test` AND explicit user approval in chat. Invoke `scripts/send_emails.py --campaign-dir <path>` for Phase A, then re-invoke with `--confirm-test` for Phase B.
+- **Stage 6 — Poll bounces**: read `playbooks/07-tracking-followup.md`. Invoke `scripts/poll_bounces.py` (note: no `--campaign-dir`; it's global). Recommended cadence: after every Phase A, weekly during bulk sends, NEVER during an active send window.
+
+Use `scripts/status.py --campaign-dir <path> --json` between stages to read pipeline state. The `next_command` field in the JSON output is the canonical next invocation.
+
+## Common questions
+
+- **What if the user changes their mind about the segment mid-campaign?**
+  The brief-hash invariant refuses to run downstream stages if `brief.yaml` mutates. Either revert the brief to its hashed contents, or start a fresh campaign in a new folder.
+- **What if port 25 is blocked?**
+  Stage 3 will exit 2 with `"Port 25 blocked. Connect to Dartmouth VPN, or set verifier.chain to ["web_citation"] in the brief, or enable api_provider."` — pick one escape hatch and re-run.
+- **What if Gmail OAuth expires?**
+  Re-run `python scripts/lib/gmail.py authorize`. The scope-superset detection in `lib/gmail.authorize` will re-prompt if a stage requests a scope the existing token doesn't have.
+- **How do I add a new message template?**
+  Drop a `.md` file under `templates/` and reference it in `brief.message.template`. The brief validator confirms the file exists at load time.
+- **Where do I see costs?**
+  `scripts/status.py --campaign-dir <path>` shows per-stage cost and total. The `observer_state.json` file in the campaign folder is the source of truth.
 
 ---
 
